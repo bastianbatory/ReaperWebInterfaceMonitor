@@ -1,0 +1,858 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=0" />
+
+<title>Annagram Monitor 2.1</title>
+<script src="main.js"></script>
+
+<style type="text/css">
+
+    @media screen and (min-device-width: 820px) {
+        body {
+            border-left: 30vw solid #333333;  
+            border-right: 30vw solid #333333;
+            }  
+        .regionName {
+            font-size: 2.2vw;
+            position: absolute;
+        }
+        #trackSelect {
+            font-size: 2.2vw;
+        }
+        #instructions {
+       font-size: 1vw;
+        }
+    }
+
+    @media screen and (max-device-width: 820px) {
+        .regionName {
+            font-size: 5vw;
+            position: absolute;
+        }
+        #trackSelect {
+            font-size: 5vw;
+        }
+        #instructions {
+       font-size: 3vw;
+        }
+    }
+
+    * {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+    
+    body {
+        background-color:#333333;
+        color:#A9ABAB;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        font-size: 1em;
+        text-align: center;
+        margin:0px;
+        user-select: none;
+        cursor: default;
+        }
+
+    #regions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 5px;
+    position:relative;
+    }
+
+    .region {
+    display: flex;
+    align-Items: center;
+    position: relative;
+    justify-Content:center;
+    }
+
+    #trackSelect {
+        width:100%;
+        color:#A9ABAB;
+        background-color:#262626;
+        border: none;
+        padding:3%;
+        -webkit-border-radius: 20px;
+        -moz-border-radius: 20px;
+        border-radius: 20px;
+        -webkit-appearance: none;
+        }
+    select option:first-child{
+        color: #555555;
+        font-style: italic;
+        }
+   #instructions {
+       color: #5e5e5e;
+       margin-top: 0.2vw;
+        display : block;
+        padding : 0% 10% 0% 10%;
+        }
+    
+    .button:hover .mouseover {
+        visibility:visible;
+        }
+    .button:active .mouseover {
+        visibility:hidden;
+        pointer-events:all;
+        }
+    .button:active .shadow {
+        visibility: hidden;
+        }
+    .button:active .gloss {
+        visibility: hidden;
+        }
+    .button:active .active {
+        visibility: visible;
+        }  
+</style>
+
+<script type="text/javascript">
+
+let regionName = ""
+let oldRegionId = ""
+let oldRegion= ""
+let newRegion= ""
+let newRegionId= ""
+let plus = ""
+
+wwr_req_recur("TRANSPORT;BEATPOS",10);
+wwr_req_recur("NTRACK;TRACK;GET/40364;GET/1157",10);
+wwr_req_recur("REGION",300);
+wwr_start(); 
+    
+var last_transport_state = -1, mouseDown = 0,
+    last_metronome = false,  nTrack = 0, last_repeat = false, snapState = 0,
+    drawnSig=0, drawnBeat=0, playPosSeconds=0, statusPosition=[], statusPositionAr=[],
+    startX = 0, joggerAgg = 0, recarmCountAr = [], recarmCount = 0, newPos = -1,
+    trackHeightsAr = [], trackColoursAr = [], trackNumbersAr = [], trackNamesAr = [],  trackVolumeAr = [],
+    trackFlagsAr = [], trackSendCntAr = [], trackRcvCntAr = [], trackHwOutCntAr = [], trackSendHwCntAr = [], trackPeakAr = [], trackMeterAr = [], faderConAr = [],
+    hereCss = document.styleSheets[1], transitions = 1;    
+
+var nTrack = 0, nTrackOld = 0, trackNameAr = [], trackRcvCntAr = [], trackHwOutCntAr = [], receiveIdxAr = [], receiveVolAr = [], receiveMuteAr = [], trackColoursAr = [], trackIsMonitorAr = [], trackIsMonitorArOld = [], selectChoiceIdx = 0, selectChoiceOld = "", mouseDown = 0, sendOutputdB = 0;    
+
+function setTextForObject(obj, text) { 
+  if (obj.lastChild) obj.lastChild.nodeValue = text;
+  else obj.appendChild(document.createTextNode(text));
+  } 
+
+
+function lumaOffset(c){
+    var c = c.substring(1);
+    var rgb = parseInt(c, 16);
+    var r = (rgb >> 16) & 0xff;
+    var g = (rgb >>  8) & 0xff;
+    var b = (rgb >>  0) & 0xff;
+    var luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    function componentToHex(c) {
+        var hex = c.toString(16);
+        return hex.length == 1 ? "0" + hex : hex;
+        }
+    if (luma < 150) {r = r+150; g = g+150; b = b+150}
+    if (luma > 150) {r = r-120; g = g-120; b = b-120}
+    if(r<0){r=0}; if(g<0){g=0}; if(b<0){b=0}
+    if(r>255){r=255}; if(g>255){g=255}; if(b>255){b=255}
+    return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}    
+
+
+    
+function mouseDownEventHandler(msg) {
+    return function(e) {
+        if (typeof e == 'undefined') e=event;
+        if (e.preventDefault) e.preventDefault();
+        wwr_req(msg);
+        return false;
+        }
+    }
+ 
+function mouseUpHandler(event){mouseDown = 0;}
+function mouseDownHandler(event, target){mouseDown = 1;}
+function mouseLeaveHandler(event){mouseDown = 0;}   
+function mouseMoveHandler(event){
+    if (mouseDown != 1){ return; }
+    else {
+        var volTrackWidth = (this.getBoundingClientRect()["width"]);
+        var volThumbWidth = volTrackWidth * 0.14375;
+        var volThumbTrackWidth = (volTrackWidth - volThumbWidth);
+        var volThumbTrackLEdge = this.getBoundingClientRect()["left"];
+        offsetX = (event.pageX - volThumbTrackLEdge - (volThumbWidth / 2));
+
+        if (event.changedTouches != undefined) {
+            offsetX = (event.changedTouches[0].pageX - volThumbTrackLEdge - (volThumbWidth / 2));
+            }
+        if(offsetX<0){offsetX=0};
+        if(offsetX>volThumbTrackWidth){offsetX=volThumbTrackWidth};
+
+        var volThumb = this.getElementsByClassName("fader")[0];
+        var offsetX320 = offsetX * (320 / volTrackWidth);
+        var vteMove320 = "translate(" + offsetX320 + " 0)";
+        volThumb.setAttributeNS(null, "transform", vteMove320);
+        var volOutput = (offsetX  / volThumbTrackWidth);
+        var volOutputdB = Math.pow(volOutput, 4) * 4;
+        wwr_req("SET/TRACK/" + selectChoiceIdx  + "/SEND/" + -this.id + "/VOL/" + volOutputdB)
+        }
+    }    
+
+
+    var thisSendTrackId=0, sendOutputdB=0;
+
+function sendMouseMoveHandler(event){
+    if (mouseDown != 1){ return; }
+    else {
+        var sendTrackWidth = this.getElementsByClassName("sendBg")[0].getBoundingClientRect()["width"];
+        var sendThumbWidth = this.getElementsByClassName("sendBg")[0].getBoundingClientRect()["height"];
+        var sendThumbTrackWidth = (sendTrackWidth - sendThumbWidth);
+        var sendThumbTrackLEdge = this.getElementsByClassName("sendBg")[0].getBoundingClientRect()["left"];
+
+        offsetX = event.pageX - sendThumbTrackLEdge - (sendThumbWidth / 2);
+        if (event.changedTouches != undefined) {
+            offsetX = (event.changedTouches[0].pageX - sendThumbTrackLEdge - (sendThumbWidth / 2));
+            }
+        if(offsetX<0){offsetX=0};
+        if(offsetX>sendThumbTrackWidth){offsetX=sendThumbTrackWidth};
+
+        var offsetX262 = offsetX * (262 / sendTrackWidth) + 26;
+        var sendThumb = this.getElementsByClassName("sendThumb")[0];
+        sendThumb.setAttributeNS(null, "cx", offsetX262 );
+        var sendLine = this.getElementsByClassName("sendLine")[0];
+        sendLine.setAttributeNS(null, "x2", offsetX262 );
+
+        var sendOutput = (offsetX  / sendThumbTrackWidth);
+        sendOutputdB = Math.pow(sendOutput, 4) * 4;
+        wwr_req("SET/TRACK/" + selectChoiceIdx + "/SEND/" + -this.id + "/VOL/" + sendOutputdB)
+        }
+    }
+    
+function sendMouseUpHandler(event){
+    wwr_req("SET/TRACK/" + selectChoiceIdx + "/SEND/" + -this.id + "/VOL/" + sendOutputdB + "e");
+    mouseDown = 0;
+    }    
+
+function volFaderConect(content, thumb){
+    content.addEventListener("mousemove", mouseMoveHandler, false);
+    content.addEventListener("touchmove", mouseMoveHandler, false);
+    content.addEventListener("mouseleave", mouseLeaveHandler, false);
+    content.addEventListener("mouseup", mouseUpHandler, false);
+    content.addEventListener("touchend", mouseUpHandler, false);
+    thumb.addEventListener("mousedown", function (event) {mouseDownHandler(event, event.srcElement)}, false);
+    thumb.addEventListener('touchstart', function(event){
+        if (event.touches.length > 0) mouseDownHandler(event, event.srcElement);
+        event.preventDefault(); }, false);
+    }    
+    
+function sendConect(content, thumb){
+    content.addEventListener("mousemove", sendMouseMoveHandler, false);
+    content.addEventListener("touchmove", sendMouseMoveHandler, false);
+    content.addEventListener("mouseleave", mouseLeaveHandler, false);
+    content.addEventListener("mouseup", sendMouseUpHandler, false);
+    content.addEventListener("touchend", sendMouseUpHandler, false);
+    thumb.addEventListener("mousedown", function (event) {mouseDownHandler(event, event.srcElement)}, false);
+    thumb.addEventListener('touchstart', function(event){
+        if (event.touches.length > 0) mouseDownHandler(event, event.srcElement);
+        event.preventDefault(); }, false);
+    }    
+    
+function wwr_onreply(results) {
+   var resultsDisplay = document.getElementById("_results");
+    if(resultsDisplay!=null){
+        resultsDisplay.innerHTML = results;
+        } 
+    
+var ar = results.split("\n");
+for (var x=0;x<ar.length;x++) {
+    var tok = ar[x].split("\t");
+    if (tok.length > 0) switch (tok[0]) {
+
+        case "TRANSPORT":
+        if (tok.length > 4) {
+            var backLoaded = document.getElementById("backLoad");
+            if(backLoaded!=null){
+                if (tok[1] != last_transport_state) {
+                last_transport_state=tok[1];
+                document.getElementById("playButtonOff").style.visibility = (last_transport_state&1) ? "hidden" : "visible"; 
+                document.getElementById("playButtonOn").style.visibility = (last_transport_state&1) ? "visible" : "hidden"; 
+                document.getElementById("pauseButtonOff").style.visibility = (last_transport_state&2) ? "hidden" : "visible"; 
+                document.getElementById("pauseButtonOn").style.visibility = (last_transport_state&2) ? "visible" : "hidden";
+                document.getElementById("record_off").style.visibility = (last_transport_state&4) ? "hidden" : "";
+                document.getElementById("record_on").style.visibility = (last_transport_state&4) ? "visible" : "";
+                document.getElementById("armed_text").style.visibility = (last_transport_state&4) ? "hidden" : "";
+                document.getElementById("armed_count").style.visibility = (last_transport_state&4) ? "hidden" : "";
+                document.getElementById("abort_text").style.visibility = (last_transport_state&4) ? "visible" : "";
+                document.getElementById("abort_cross").style.visibility = (last_transport_state&4) ? "visible" : "";
+                }
+
+            if (tok[2] != playPosSeconds) {playPosSeconds=tok[2];}    
+        }
+        }
+
+    case "BEATPOS":
+        var playLine = document.querySelector('#playLine');    
+        if (tok.length > 5 && playLine) {
+            var playLineCirc = 301.1;
+            var playLineArc = playLineCirc - (playLineCirc / tok[6]);
+            thisBeat=Math.round(tok[5]);
+            var playLineRotate = (360 / tok[6]) * thisBeat;
+            thisSig=tok[6];
+                if (drawnSig!=thisSig || drawnBeat!=thisBeat && playLine){ 
+                    playLine.setAttributeNS(null, "stroke-dasharray", playLineCirc);
+                    playLine.setAttributeNS(null, "stroke-dashoffset", playLineArc);
+                    if (!playLineRotate){
+                        playLineRotate = "0"
+                    }
+                    playLine.setAttribute("transform","rotate(" + playLineRotate + ",151.8,52.4)");
+                    }
+              }
+      break; 
+ 
+      case "REGION_LIST":
+            g_regions = []; 
+            
+            break;
+      case "REGION":
+            
+            g_regions.push(tok);
+
+            break;
+            
+      case "REGION_LIST_END":
+        
+            for (var i = 0; i < g_regions.length; i++) {
+                if (
+                    (i < g_regions.length - 1 && 
+                        playPosSeconds >= parseFloat(g_regions[i][3]) && 
+                        playPosSeconds < Math.floor(parseFloat(g_regions[i + 1][3]) * 1e6) / 1e6) ||
+                    (i === g_regions.length - 1 && playPosSeconds >= parseFloat(g_regions[i][3]))
+                ) {
+                    
+                    cursorRegion = g_regions[i][1].replace(/\s+/g, '');  // get region on cursor
+                    newRegion = cursorRegion;
+                    cursorRegionId = parseFloat(g_regions[i][2]) - 1;
+                    newRegionId = cursorRegionId;
+                }
+            }
+            
+            const regionsDiv = document.getElementById("regions");
+            const regionDiv = regionsDiv.querySelector("#region");
+            if (g_regions.length > 0) {
+                for (var i = 0; i < g_regions.length; i++) {
+                    regionName = g_regions[i][1].replace(/\s+/g, '');
+                    const regionX = document.getElementById("region" + i);
+                    if (!regionX) {
+                        let action= 41761 + i
+                        const region = regionDiv.cloneNode(true);
+                        const button = region.querySelector(".button");
+                        const regname = region.querySelector(".regionName");
+                        const svg = region.querySelector(".svg");
+                        const pathbtn = region.querySelector(".path");
+                        const cyangrad = region.querySelector("#cyangrad");
+                        const graygrad = region.querySelector("#graygrad");
+                        button.setAttribute("onclick", `wwr_req(${action}), wwr_req(1007) `);
+                        pathbtn.setAttribute("fill", `url(#graygrad${i})`);
+                        cyangrad.id = "cyangrad" + i;
+                        graygrad.id = "graygrad" + i;
+                        region.id = "region" + i;
+                        region.style.removeProperty("display");
+                        regname.innerHTML = regionName;
+                        if (i % 2 !==0) {
+                            svg.style.transform = 'scaleX(-1)';
+                        }
+                        regionsDiv.appendChild(region);
+                    }
+                }
+            }
+
+            if (newRegion!==oldRegion) {
+                const newregionselector = document.getElementById("region" + newRegionId); 
+                const oldregionselector = document.getElementById("region" + oldRegionId);
+                const newPath = newregionselector.querySelector(".path");
+                const oldPath = oldregionselector.querySelector(".path");
+                newPath.setAttribute("fill", `url(#cyangrad${newRegionId})`);
+                oldPath.setAttribute("fill", `url(#graygrad${oldRegionId})`);
+
+            }
+                oldRegion = newRegion;
+                oldRegionId = newRegionId;
+                break;
+
+        case "NTRACK":
+            if (tok.length > 1) {
+                nTrack = parseInt(tok[1])+1;
+                if(nTrack!=nTrackOld){
+                    trackRcvCntAr=[];
+                    nTrackOld=nTrack;
+                    }
+                }
+        break;
+        case "TRACK":
+        idx = parseInt(tok[1]);
+            
+        if(tok[2].trim()!=trackNameAr[idx]){
+            trackNameAr[idx] = tok[2].trim();
+            }
+    
+        if(tok[11]!=trackRcvCntAr[idx]){
+            trackRcvCntAr[idx] = tok[11];
+            }
+    
+        if(tok[12]!=trackHwOutCntAr[idx]){
+            trackHwOutCntAr[idx] = tok[12];
+            }
+            
+        if(tok[13]>0 && tok[13]!=trackColoursAr[idx]){
+            trackColoursAr[idx] = tok[13];
+            }    
+            
+        break;
+            
+        case "SEND":
+
+            if (tok.length > 3) {
+                var f = -tok[2] - 1;
+                receiveIdxAr[f] = tok[6];
+                receiveVolAr[f] = tok[4];
+                if(tok[6]==-1){var hardVol = tok[4]}
+                if(tok[3]&8){receiveMuteAr[f] = 1}
+                else{receiveMuteAr[f] = 0}
+
+        
+                }
+        break;    
+        }
+    }
+    
+    for(x=0;x<nTrack;x++){ 
+        if((trackHwOutCntAr[x]>0) && (trackRcvCntAr[x]>0)){
+            trackIsMonitorAr[x] = 1;
+            }
+        else {trackIsMonitorAr[x] = 0;}
+        }
+    var trackSelect = document.getElementById("trackSelect");
+    if(trackIsMonitorAr.length>(nTrack+1)){
+        trackIsMonitorAr.pop();
+        for(i=trackSelect.options.length ; i>=1 ; i--){
+                trackSelect.remove(i);
+            }
+        }
+    if(trackIsMonitorArOld.length>nTrack){
+        trackIsMonitorArOld.pop();
+        }
+    
+    for(x=0;x<trackIsMonitorArOld.length;x++){
+        if(trackIsMonitorArOld[x]===undefined){trackIsMonitorArOld[x]=0} //so that first time round doesn't count as 'changed'
+        }
+    function getSum(total, num) {return total + num;}
+    var trackIsMonitorArSum = trackIsMonitorAr.reduce(getSum);
+    if(trackIsMonitorArOld.length>0){var trackIsMonitorArOldSum = trackIsMonitorArOld.reduce(getSum)}
+    if(trackIsMonitorArSum!=trackIsMonitorArOldSum){
+        for(i=trackSelect.options.length ; i>=1 ; i--){
+                trackSelect.remove(i);
+            }
+        }
+    
+    if(trackSelect.options.length==1){
+        for(x=0;x<nTrack;x++){
+            if(trackIsMonitorAr[x]==1){
+                var option = document.createElement("option");
+                option.text = trackNameAr[x];
+                trackSelect.add(option);
+                }
+            trackIsMonitorArOld[x] = trackIsMonitorAr[x];
+            }
+        }
+    
+    var selectChoice = trackSelect.value;
+    if(selectChoice!=selectChoiceOld){
+        selectChoiceIdx = trackNameAr.indexOf(selectChoice);
+        selectChoiceOld = selectChoice;
+        }
+    
+    for(y=1;y<(parseInt(trackRcvCntAr[selectChoiceIdx])+1);y++){ 
+        wwr_req("GET/TRACK/" + selectChoiceIdx + "/SEND/" + (-y)); // requesting receive values of the track being displayed
+       }
+    wwr_req("GET/TRACK/" + selectChoiceIdx + "/SEND/" + 0); // request the first normal send, which should be the hardware send
+    
+    var faderContent = document.getElementsByClassName("trackRow2")[0];
+    var receivesContent = document.getElementById("receives");
+    var instructions = document.getElementById("instructions");
+    var cloneFader = document.getElementById("trackRow2Svg").cloneNode(true);
+    var cloneTrackSend = document.getElementById("trackSendSvg").cloneNode(true);
+    var drawnReceives = trackRcvCntAr[selectChoiceIdx];
+    var drawnReceivesDone = receivesContent.childNodes.length;
+    if (drawnReceives<drawnReceivesDone || drawnReceives==null){
+        if(receivesContent.lastChild){receivesContent.removeChild(receivesContent.lastChild)}
+        }
+    if (drawnReceives>drawnReceivesDone){
+        var sendDiv = document.createElement("div");
+        sendDiv.className = ("sendDiv");
+        receivesContent.appendChild(sendDiv);
+        sendDiv.appendChild(cloneTrackSend);
+        }
+    if (drawnReceives==null && faderContent.innerHTML){
+        faderContent.innerHTML=""
+        instructions.style.display = "block";
+        }
+    if (drawnReceives>=1 && faderContent.innerHTML===""){
+        faderContent.appendChild(cloneFader);
+        instructions.style.display = "none";
+        }
+    
+    
+    
+    //----------------------------------
+    // Now do things based on what's been DRAWN
+    //----------------------------------        
+    
+    var trackRow2Content = document.getElementById("trackRow2Svg");
+    if(trackRow2Content){
+        var volThumb = trackRow2Content.getElementsByClassName("fader")[0];
+            volFaderConect(trackRow2Content,volThumb);
+            volThumb.volSetting = (Math.pow(hardVol, 1/4) * 194.68);
+            if(volThumb.volSetting){
+                var vteMove = "translate(" + volThumb.volSetting + " 0)"
+                if(mouseDown != 1){volThumb.setAttributeNS(null, "transform", vteMove);}
+                }
+        }
+    
+    for(x=0;x<drawnReceivesDone;x++){ //remember not to spam the DOM like a twat
+        var thisChild = receivesContent.childNodes[x];
+        if(thisChild && receiveIdxAr[x] && receiveVolAr[x]){
+            thisChild.id = x+1;
+            thisName = trackNameAr[receiveIdxAr[x]];
+            thisVol = mkvolstr(receiveVolAr[x]);
+            var thisCol = ("#" + (trackColoursAr[receiveIdxAr[x]]|0x1000000).toString(16).substr(-6));
+            if(thisChild){
+                sendTitleText = thisChild.getElementsByClassName("sendTitleText")[0]
+                sDbText = thisChild.getElementsByClassName("sDbText")[0];
+                }
+            if(sendTitleText && sendTitleText.textContent!=thisName)sendTitleText.textContent = thisName;      
+            if(sDbText && sDbText.Content!=thisVol)sDbText.textContent = thisVol;
+            var sendLine = thisChild.getElementsByClassName("sendLine")[0];
+            sSetting = (Math.pow(receiveVolAr[x], 1/4) * 154) + 27;
+            if(mouseDown != 1){sendLine.setAttributeNS(null, "x2", sSetting);}
+            var sendThumb = thisChild.getElementsByClassName("sendThumb")[0];
+            if(mouseDown != 1){sendThumb.setAttributeNS(null, "cx", sSetting);}
+            
+            sendConect(thisChild,sendThumb);
+            
+            var sendThumbColour = thisChild.getAttribute("style")
+            var defaultColour = "#000000";
+            if(thisCol!=defaultColour){
+                if(sendThumbColour!=thisCol){
+                    sendThumb.setAttributeNS(null, "fill", thisCol);
+                    sendTitleText.setAttributeNS(null, "fill", thisCol);
+                    }
+                }
+                else{
+                    sendThumb.setAttributeNS(null, "fill", "#808080");
+                    sendTitleText.setAttributeNS(null, "fill", "#A3A3A3");
+                    }
+            
+            var sendMuteButton = thisChild.getElementsByClassName("send_mute")[0];
+            sendMuteButton.onmousedown = mouseDownEventHandler("SET/TRACK/" + selectChoiceIdx + "/SEND/" + (-x-1) + "/MUTE/-1");
+            var sendMuteOff = thisChild.getElementsByClassName("send_mute_off")[0];
+            var sendMuteOn = thisChild.getElementsByClassName("send_mute_on")[0];
+            if(receiveMuteAr[x]==1){
+                sendMuteOff.style.visibility = "hidden";
+                sendMuteOn.style.visibility = "visible";
+                }
+            else{
+                sendMuteOff.style.visibility = "visible";
+                sendMuteOn.style.visibility = "hidden";
+                }
+            }
+        }
+}
+
+function init(){
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+    for (let l = 0; l < document.styleSheets.length; l ++) {
+      let ss = document.styleSheets[l];
+      if (ss.cssRules) for (let i=0; i < ss.cssRules.length; i++){
+        let st = ss.cssRules[i].selectorText;
+        if (st != undefined && st.startsWith(".button")) ss.removeRule(i--);
+      }
+    }
+  }
+}    
+</script>
+</head>
+<body>
+ 
+<div class="content">
+
+
+<select id="trackSelect">
+    <option>Elige a un gueon...</option>
+    </select>
+
+    <div id="colWrap">
+        <div id="instructions">
+            Annagram Monitor v2.1 <br><br>
+            </div>
+    </div>
+
+<div class="trackRow2"></div> 
+
+<div id="receives"></div>
+
+<div id="transport" style="display: flex; flex-direction: column; position:relative;">
+   
+                 
+    <div id="transport_r2">
+    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="100%"
+     height="100%" viewBox="0 0 303.6 107.6" xml:space="preserve">
+        <circle id="playLineBg" fill="#222625" cx="151.8" cy="52.4" r="52.3"/>
+        <circle id="playLine" fill="none" stroke-dasharray="50" stroke-dashoffset="10" stroke="#00FE95" stroke-width="6" stroke-miterlimit="10" cx="151.8" cy="52.4" r="48"/>
+        
+        <g id="play" class="button" onClick="wwr_req(1007)">
+            <g id=playButtonOn visibility="hidden">
+                <path fill="#00FF99" d="M151.8,97c-24.6,0-44.6-20-44.6-44.6s20-44.6,44.6-44.6s44.6,20,44.6,44.6S176.4,97,151.8,97z"/>
+                <path fill="#1A1A1A" d="M151.8,8.4c24.3,0,44,19.7,44,44s-19.7,44-44,44s-44-19.7-44-44S127.5,8.4,151.8,8.4 M151.8,7.2
+                    c-25,0-45.2,20.2-45.2,45.2s20.2,45.2,45.2,45.2S197,77.4,197,52.4S176.8,7.2,151.8,7.2L151.8,7.2z"/>
+    
+                    <linearGradient id="pograd" gradientUnits="userSpaceOnUse" x1="151.7784" y1="-1823.5439" x2="151.7784" y2="-1779.5526" gradientTransform="matrix(1 0 0 -1 0 -1771.1405)">
+                    <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0.25"/>
+                    <stop  offset="1" style="stop-color:#FFFFFF"/>
+                </linearGradient>
+                <path opacity="0.15" fill="url(#pograd)" d="M195.8,52.4h-88l0,0c0-24.3,19.7-44,44-44l0,0
+                    C176.2,8.4,195.8,28.1,195.8,52.4L195.8,52.4z"/>
+                <polygon fill="#FFFFFF" points="139.6,67.9 139.6,37.1 170.4,52.4 		"/>
+                <path class="mouseover" visibility="hidden" opacity="0.2" fill="#FFFFFF" d="M151.8,97c-24.6,0-44.6-20-44.6-44.6
+                    s20-44.6,44.6-44.6s44.6,20,44.6,44.6S176.4,97,151.8,97z"/>
+            </g>
+            <g id=playButtonOff visibility="visible">
+                <circle  class="shadow" opacity="0.15" cx="151.8" cy="62.4" r="45.2"/>
+    
+                    <linearGradient id="pffgrad" gradientUnits="userSpaceOnUse" x1="151.7784" y1="1033.0232" x2="151.7784" y2="943.7836" gradientTransform="matrix(1 0 0 1 0 -936)">
+                    <stop  offset="0" style="stop-color:#697373"/>
+                    <stop  offset="1" style="stop-color:#B0BBBB"/>
+                </linearGradient>
+                <path fill="url(#pffgrad)" d="M151.8,97c-24.6,0-44.6-20-44.6-44.6s20-44.6,44.6-44.6s44.6,20,44.6,44.6S176.4,97,151.8,97z"/>
+                <path fill="#1A1A1A" d="M151.8,8.4c24.3,0,44,19.7,44,44s-19.7,44-44,44s-44-19.7-44-44S127.5,8.4,151.8,8.4 M151.8,7.2
+                    c-25,0-45.2,20.2-45.2,45.2s20.2,45.2,45.2,45.2S197,77.4,197,52.4S176.8,7.2,151.8,7.2L151.8,7.2z"/>
+    
+                    <linearGradient id="pffgrad2" gradientUnits="userSpaceOnUse" x1="151.7784" y1="-1823.5439" x2="151.7784" y2="-1779.5526" gradientTransform="matrix(1 0 0 -1 0 -1771.1405)">
+                    <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0.25"/>
+                    <stop  offset="1" style="stop-color:#FFFFFF"/>
+                </linearGradient>
+                <path opacity="0.15" fill="url(#pffgrad2)" d="M195.8,52.4h-88l0,0c0-24.3,19.7-44,44-44l0,0
+                    C176.2,8.4,195.8,28.1,195.8,52.4L195.8,52.4z"/>
+                <polygon fill="#1A1A1A" points="139.6,67.9 139.6,37.1 170.4,52.4 "/>
+                <path class="mouseover" visibility="hidden" opacity="0.2" fill="#FFFFFF" d="M151.8,97c-24.6,0-44.6-20-44.6-44.6
+                    s20-44.6,44.6-44.6s44.6,20,44.6,44.6S176.4,97,151.8,97z"/>
+            </g>
+        </g>
+        <g id="stopButton" class="button" onClick="wwr_req(40667)">
+            <path  class="shadow" opacity="0.15" d="M8.4,58.7c0,0.6,0,1.1,0,1.7v0c0,25.9,21,47,47,47h37
+                c5.6,0,11-2.1,15.1-5.9c-10-10.8-16.1-25.2-16.1-41.1c0-0.6,0-1.1,0-1.7H8.4z"/>
+            <g>
+                <linearGradient id="stgrad" gradientUnits="userSpaceOnUse" x1="58.0022" y1="4.8047" x2="58.0022" y2="100.002">
+                    <stop  offset="0" style="stop-color:#404040"/>
+                    <stop  offset="1" style="stop-color:#262626"/>
+                </linearGradient>
+                <path fill="url(#stgrad)" d="M55.3,100C29.1,100,7.7,78.6,7.7,52.4S29.1,4.8,55.3,4.8h36.9c5.8,0,11.4,2.2,15.6,6.1l0.5,0.4
+                    l-0.4,0.5C97.6,22.9,91.9,37.3,91.9,52.4c0,15.1,5.7,29.6,16,40.7l0.4,0.5l-0.5,0.4c-4.3,3.9-9.8,6-15.6,6H55.3z"/>
+                <path fill="#1A1A1A" d="M92.2,5.4c5.6,0,11.1,2.1,15.2,5.9c-10,10.8-16.1,25.2-16.1,41.1c0,15.9,6.1,30.3,16.1,41.1
+                    c-4.1,3.8-9.5,5.9-15.1,5.9h-37c-25.9,0-47-21-47-47v0c0-25.9,21-47,47-47H92.2 M92.2,4.2H55.3C28.7,4.2,7.1,25.8,7.1,52.4
+                    c0,26.6,21.6,48.2,48.2,48.2h37c5.9,0,11.6-2.2,16-6.2l0.9-0.8l-0.9-0.9c-10.2-11-15.8-25.3-15.8-40.2c0-14.9,5.6-29.2,15.8-40.2
+                    l0.9-0.9l-0.9-0.8C103.8,6.4,98.1,4.2,92.2,4.2L92.2,4.2z"/>
+            </g>
+            <rect x="39.9" y="34.3" fill="#808080" width="32.9" height="32.9"/>
+            <linearGradient id="stgrad2" gradientUnits="userSpaceOnUse" x1="57.8796" y1="50.7389" x2="57.8796" y2="5.4297">
+                <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0.25"/>
+                <stop  offset="1" style="stop-color:#FFFFFF"/>
+            </linearGradient>
+            <path opacity="5.000000e-02" fill="url(#stgrad2)" d="M55.3,5.4C29.9,5.4,9.3,25.6,8.4,50.7h82.9c0.4-15.2,6.4-29,16.1-39.4l0,0
+                c-4.1-3.8-9.5-5.9-15.1-5.9H55.3z"/>
+            <path opacity="5.000000e-02" d="M8.4,50.7c0,0.6,0,1.1,0,1.7v0c0,25.9,21,47,47,47h37c5.6,0,11-2.1,15.1-5.9
+                c-10-10.8-16.1-25.2-16.1-41.1c0-0.6,0-1.1,0-1.7H8.4z"/>
+            <path class="mouseover" visibility="hidden" opacity="0.05" fill="#FFFFFF" d="M107.4,93.5c-10-10.8-16.1-25.2-16.1-41.1
+                c0-15.9,6.1-30.3,16.1-41.1c-4.2-3.8-9.6-5.9-15.2-5.9H55.3c-25.9,0-47,21-47,47v0c0,25.9,21,47,47,47h37
+                C97.9,99.4,103.3,97.3,107.4,93.5z"/>
+        </g>
+        <g id="pause" class="button" onClick="wwr_req(1008)">
+            <g id="pauseButtonOn" visibility="hidden">
+                <path class="shadow" opacity="0.15" d="M295.2,58.7c0,0.6,0,1.1,0,1.7v0c0,25.9-21,47-47,47h-37
+                    c-5.6,0-11-2.1-15.1-5.9c10-10.8,16.1-25.2,16.1-41.1c0-0.6,0-1.1,0-1.7H295.2z"/>
+                <path fill="#7DBBBB" stroke="#000000" stroke-width="1.25" stroke-miterlimit="10" d="M196.2,93.5c10-10.8,16.1-25.2,16.1-41.1
+                    c0-15.9-6.1-30.3-16.1-41.1c4.2-3.8,9.6-5.9,15.2-5.9h36.9c25.9,0,47,21,47,47v0c0,25.9-21,47-47,47h-37
+                    C205.7,99.4,200.3,97.3,196.2,93.5z"/>
+                <path fill="#FFFFFF" d="M230.8,67.2h11V34.3h-11V67.2z M252.6,34.3v32.9h11V34.3H252.6z"/>
+                <path class="mouseover" visibility="hidden" opacity="0.2" fill="#FFFFFF" d="M196.2,93.5c10-10.8,16.1-25.2,16.1-41.1
+                    c0-15.9-6.1-30.3-16.1-41.1c4.2-3.8,9.6-5.9,15.2-5.9h36.9c25.9,0,47,21,47,47v0c0,25.9-21,47-47,47h-37
+                    C205.7,99.4,200.3,97.3,196.2,93.5z"/>
+            </g>
+            <g id="pauseButtonOff" visibility="visible">
+                <path class="shadow" opacity="0.15" d="M295.2,58.7c0,0.6,0,1.1,0,1.7v0c0,25.9-21,47-47,47h-37
+                    c-5.6,0-11-2.1-15.1-5.9c10-10.8,16.1-25.2,16.1-41.1c0-0.6,0-1.1,0-1.7H295.2z"/>
+                <g>
+                        <linearGradient id="pfgrad" gradientUnits="userSpaceOnUse" x1="269.153" y1="4.8047" x2="269.153" y2="100.002" gradientTransform="matrix(-1 0 0 1 514.7297 0)">
+                        <stop  offset="0" style="stop-color:#404040"/>
+                        <stop  offset="1" style="stop-color:#262626"/>
+                    </linearGradient>
+                    <path fill="url(#pfgrad)" d="M211.3,100c-5.8,0-11.3-2.1-15.6-6l-0.5-0.4l0.4-0.5c10.3-11.1,16-25.6,16-40.7
+                        c0-15.1-5.7-29.5-15.9-40.6l-0.4-0.5l0.5-0.4c4.3-3.9,9.8-6.1,15.6-6.1h36.9c26.2,0,47.6,21.4,47.6,47.6S274.5,100,248.3,100
+                        H211.3z"/>
+                    <path fill="#1A1A1A" d="M248.3,5.4c25.9,0,47,21,47,47v0c0,25.9-21,47-47,47h-37c-5.6,0-11-2.1-15.1-5.9
+                        c10-10.8,16.1-25.2,16.1-41.1c0-15.9-6.1-30.3-16.1-41.1c4.2-3.8,9.6-5.9,15.2-5.9H248.3 M248.3,4.2h-36.9
+                        c-6,0-11.7,2.2-16.1,6.2l-0.9,0.8l0.9,0.9c10.2,11,15.8,25.3,15.8,40.2c0,15-5.6,29.2-15.8,40.2l-0.9,0.9l0.9,0.8
+                        c4.4,4,10.1,6.2,16,6.2h37c26.6,0,48.2-21.6,48.2-48.2C296.5,25.8,274.9,4.2,248.3,4.2L248.3,4.2z"/>
+                </g>
+                <path fill="#808080" d="M230.8,67.2h11V34.3h-11V67.2z M252.6,34.3v32.9h11V34.3H252.6z"/>
+                    <linearGradient id="pfgrad2" gradientUnits="userSpaceOnUse" x1="269.0302" y1="50.7389" x2="269.0302" y2="5.4297" gradientTransform="matrix(-1 0 0 1 514.7297 0)">
+                    <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0.25"/>
+                    <stop  offset="1" style="stop-color:#FFFFFF"/>
+                </linearGradient>
+                <path opacity="5.000000e-02" fill="url(#pfgrad2)" d="M248.3,5.4c25.4,0,46.1,20.1,46.9,45.3h-82.9c-0.4-15.2-6.4-29-16.1-39.4
+                    l0,0c4.1-3.8,9.5-5.9,15.1-5.9H248.3z"/>
+                <path opacity="5.000000e-02" d="M295.2,50.7c0,0.6,0,1.1,0,1.7v0c0,25.9-21,47-47,47h-37c-5.6,0-11-2.1-15.1-5.9
+                    c10-10.8,16.1-25.2,16.1-41.1c0-0.6,0-1.1,0-1.7H295.2z"/>
+                <path class="mouseover" visibility="hidden" opacity="0.05" fill="#FFFFFF" d="M196.2,93.5c10-10.8,16.1-25.2,16.1-41.1
+                    c0-15.9-6.1-30.3-16.1-41.1c4.2-3.8,9.6-5.9,15.2-5.9h36.9c25.9,0,47,21,47,47v0c0,25.9-21,47-47,47h-37
+                    C205.7,99.4,200.3,97.3,196.2,93.5z"/>
+            </g>
+            
+        </g>
+        
+    </svg>
+        </div> 
+        
+    <div id="regions">
+        <div id="region" class="region" style="display:none;">
+            <svg class="svg" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 303.6 107.6">
+                <g class="button" onClick="wwr_req()" style="background-color: rgba(0, 139, 139, 0.5); flex: 1; height: 100%; display: flex;justify-content: center; align-items: center;">
+                    <path class="shadow" opacity="0.15" d="M 8.4 58.7 C 8.4 59.3 8.4 59.8 8.4 60.4 C 8.4 86.3 29.4 107.4 55.4 107.4 L 279.291 107.602 C 284.891 107.602 290.291 105.502 294.391 101.702 C 284.391 90.902 278.291 76.502 278.291 60.602 C 278.291 60.002 278.291 59.502 278.291 58.902 L 8.4 58.7 Z"/>
+                    <g>
+                        <linearGradient class=grad id="cyangrad" gradientUnits="userSpaceOnUse" x1="58.0022" y1="4.8047" x2="58.0022" y2="100.002">
+                            <stop offset="0" style="stop-color:#00FF99"></stop>
+                            <stop offset="1" style="stop-color:#00FFFF"></stop>
+                        </linearGradient>
+                        <linearGradient class=grad id="graygrad" gradientUnits="userSpaceOnUse" x1="58.0022" y1="4.8047" x2="58.0022" y2="100.002">
+                            <stop offset="0" style="stop-color:#404040"></stop>
+                            <stop offset="1" style="stop-color:#262626"></stop>
+                        </linearGradient>
+                        <path class="path" fill="url(#graygrad)" d="M 55.3 100 C 29.1 100 7.7 78.6 7.7 52.4 C 7.7 26.2 29.1 4.8 55.3 4.8 L 279.091 5.002 C 284.891 5.002 290.491 7.202 294.691 11.102 L 295.191 11.502 L 294.791 12.002 C 284.491 23.102 278.791 37.502 278.791 52.602 C 278.791 67.702 284.491 82.202 294.791 93.302 L 295.191 93.802 L 294.691 94.202 C 290.391 98.102 284.891 100.202 279.091 100.202 L 55.3 100 Z"/>
+                        <path fill="#1A1A1A" d="M 279.091 5.602 C 284.691 5.602 290.191 7.702 294.291 11.502 C 284.291 22.302 278.191 36.702 278.191 52.602 C 278.191 68.502 284.291 82.902 294.291 93.702 C 290.191 97.502 284.791 99.602 279.191 99.602 L 55.3 99.4 C 29.4 99.4 8.3 78.4 8.3 52.4 C 8.3 26.5 29.3 5.4 55.3 5.4 L 279.091 5.602 M 279.091 4.402 L 55.3 4.2 C 28.7 4.2 7.1 25.8 7.1 52.4 C 7.1 79 28.7 100.6 55.3 100.6 L 279.191 100.802 C 285.091 100.802 290.791 98.602 295.191 94.602 L 296.091 93.802 L 295.191 92.902 C 284.991 81.902 279.391 67.602 279.391 52.702 C 279.391 37.802 284.991 23.502 295.191 12.502 L 296.091 11.602 L 295.191 10.802 C 290.691 6.602 284.991 4.402 279.091 4.402 Z"/>
+                        <path class="mouseover" visibility="hidden" fill="#FFFFFF" d="M 294.291 93.702 C 284.291 82.902 278.191 68.502 278.191 52.602 C 278.191 36.702 284.291 22.302 294.291 11.502 C 290.091 7.702 284.691 5.602 279.091 5.602 L 55.3 5.4 C 29.4 5.4 8.3 26.4 8.3 52.4 C 8.3 78.3 29.3 99.4 55.3 99.4 L 279.191 99.602 C 284.791 99.602 290.191 97.502 294.291 93.702 Z" opacity="0.05"></path>
+                    </g>
+                </g>
+            </svg>
+            <p class=regionName font-family="'Open Sans'" style="pointer-events: none;">
+            </p>
+        </div>
+    </div>
+
+        <div id="transport_r3" style="margin: 1.5%;">
+     
+        
+        <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="66%" height="100%" viewBox="0 0 201.4 108" xml:space="preserve"><path id="bg" fill="#262626" d="M151.7,99.5H48.6V0l103.1,0c27.5,0,49.7,22.3,49.7,49.7v0C201.4,77.2,179.2,99.5,151.7,99.5z"/><circle fill="#333333" cx="151.5" cy="49.4" r="26.4"/><g id="armed" class="button" ><text id="armed_count" text-anchor="middle" transform="matrix(1 0 0 1 152 67)" fill="#788282" font-family="'Open Sans'" font-weight="700" font-size="49px"></text>	<path id="armed_text" fill="#5D3729" d="M110.7,63.7l2-1.1l-1-3.7l-2.3,0l-0.9-3.3l12.3,0.6l1.1,4.1L111.7,67L110.7,63.7z M115,61.3l1.7-1c0.4-0.2,0.9-0.5,1.5-0.8c0.6-0.3,1-0.6,1.3-0.7c-0.3,0-0.7,0.1-1.4,0.1c-0.6,0-1.9,0-3.8,0.1L115,61.3z M119.4,71.7l-3.5,2.5l-1.8-2.6l9.5-6.8l2.2,3.1c1.8,2.6,1.8,4.5,0,5.9c-1.1,0.8-2.3,0.9-3.7,0.2l-2.2,5.7l-2.1-2.9l2-4.5	L119.4,71.7z M121.4,70.3l0.3,0.5c0.6,0.9,1.4,1.1,2.1,0.5c0.7-0.5,0.7-1.1,0-2l-0.4-0.5L121.4,70.3z M129.1,87l-5.6-4.1l7-9.4 l5.6,4.1l-1.5,2l-3-2.3l-1.1,1.5l2.8,2.1l-1.5,2l-2.8-2.1l-1.3,1.8l3,2.3L129.1,87z M147.5,93.2l-0.2-2.3l-3.7-0.6l-0.9,2.1 l-3.4-0.6l5.6-11l4.2,0.7l1.9,12.2L147.5,93.2z M147,88.3l-0.2-2c0-0.4-0.1-1-0.2-1.7c-0.1-0.7-0.1-1.2-0.1-1.5 c-0.1,0.3-0.3,0.7-0.5,1.3c-0.2,0.6-0.7,1.8-1.5,3.5L147,88.3z M158.4,88.6l0.8,4.2l-3.1,0.6l-2.2-11.5l3.8-0.7 c3.1-0.6,4.9,0.2,5.3,2.5c0.3,1.3-0.2,2.5-1.4,3.5l4.3,4.4l-3.5,0.7l-3.2-3.7L158.4,88.6z M157.9,86.3l0.6-0.1 c1.1-0.2,1.5-0.8,1.3-1.7c-0.2-0.8-0.8-1.1-1.8-0.9l-0.6,0.1L157.9,86.3z M175.3,86.7l-6.7-5.6l-0.1,0c0.9,1.1,1.6,2,2,2.7l2.9,4.2 l-2.3,1.6l-6.6-9.6l3.5-2.4l6.7,5.5l0.1,0l-2.7-8.2l3.5-2.4L182,82l-2.4,1.6l-2.9-4.2c-0.2-0.2-0.3-0.5-0.5-0.7 c-0.2-0.3-0.6-1-1.3-2l-0.1,0l2.8,8.3L175.3,86.7z M190.2,71.1l-3.9,5.7l-9.7-6.5l3.9-5.7l2.1,1.4l-2.1,3.1l1.5,1l2-2.9l2.1,1.4 l-2,2.9l1.8,1.2l2.1-3.1L190.2,71.1z M189.5,54.8c1.9,0.5,3.2,1.4,3.9,2.7c0.7,1.3,0.8,2.9,0.3,4.8l-1,3.6l-11.3-3.1l1.1-3.9 c0.5-1.8,1.3-3.1,2.5-3.8C186.2,54.4,187.7,54.3,189.5,54.8z M188.7,58c-1-0.3-1.9-0.3-2.5,0c-0.6,0.3-1,0.8-1.3,1.7l-0.2,0.9	l6.3,1.7l0.2-0.7c0.3-0.9,0.2-1.7-0.2-2.3C190.6,58.7,189.8,58.3,188.7,58z M128.1,27.2l-2.1,2.4l-6.9-5.9l-1.9,2.2l-2-1.7l5.8-6.7 l2,1.7l-1.8,2.2L128.1,27.2z M132.1,18.5l2.2,3.7l-2.7,1.6l-5.9-10.1l3.3-1.9c2.7-1.6,4.7-1.4,5.9,0.6c0.7,1.2,0.6,2.4-0.1,3.7 l5.5,2.7l-3.1,1.8l-4.3-2.4L132.1,18.5z M130.9,16.5l0.5-0.3c0.9-0.6,1.2-1.3,0.7-2.1c-0.4-0.7-1.1-0.8-2-0.2l-0.5,0.3L130.9,16.5z M148.6,17.2l-0.9-2.1l-3.7,0.6l-0.2,2.3l-3.4,0.6l1.8-12.2l4.2-0.7l5.8,10.9L148.6,17.2z M146.6,12.7l-0.8-1.8	c-0.2-0.4-0.4-0.9-0.7-1.6c-0.3-0.6-0.5-1.1-0.6-1.4c0,0.3,0,0.7-0.1,1.4s-0.1,1.9-0.3,3.8L146.6,12.7z M160.4,8.9 c-0.7-0.1-1.4,0.1-1.9,0.6c-0.5,0.5-0.9,1.3-1.1,2.4c-0.4,2.2,0.2,3.5,1.9,3.8c0.5,0.1,1,0.1,1.5,0.1s1-0.1,1.5-0.2l-0.5,2.6	c-1,0.2-2.2,0.2-3.4,0c-1.7-0.3-3-1.1-3.7-2.3c-0.7-1.2-0.9-2.7-0.6-4.6c0.2-1.2,0.6-2.2,1.3-3c0.6-0.8,1.4-1.4,2.3-1.7	s2-0.4,3.1-0.2c1.2,0.2,2.4,0.7,3.4,1.5l-1.4,2.3c-0.4-0.3-0.8-0.5-1.2-0.7C161.3,9.1,160.9,9,160.4,8.9z M172.8,24.6l-3.1-1.8 l0.3-5l-1.1,0l-2,3.4l-2.7-1.6l6-10l2.7,1.6l-2.6,4.4c0.3-0.2,0.8-0.5,1.6-0.8l3.9-1.8l3,1.8l-5.8,2.6L172.8,24.6z M181.5,29.4 c-0.6,0.5-1.2,0.7-1.8,0.8c-0.7,0.1-1.3,0-2-0.4c-0.7-0.3-1.3-0.8-1.9-1.6c-0.5-0.6-0.9-1.1-1.1-1.6c-0.3-0.5-0.5-1-0.6-1.6 l2.1-1.8c0.2,0.7,0.4,1.3,0.7,1.9c0.3,0.6,0.6,1.1,1,1.5c0.3,0.4,0.6,0.6,0.9,0.6s0.5,0,0.7-0.2c0.1-0.1,0.2-0.2,0.2-0.4 c0-0.1,0-0.3,0-0.6c0-0.2-0.2-0.8-0.4-1.7c-0.2-0.8-0.3-1.5-0.3-2c0-0.5,0.1-1,0.3-1.4c0.2-0.4,0.5-0.8,1-1.2 c0.8-0.7,1.7-0.9,2.7-0.7c1,0.2,1.9,0.8,2.8,1.9c0.8,0.9,1.4,2,1.8,3.4l-2.5,0.8c-0.3-1.2-0.7-2-1.3-2.6c-0.3-0.3-0.5-0.5-0.7-0.5	s-0.4,0-0.6,0.1c-0.2,0.1-0.3,0.4-0.2,0.7c0,0.3,0.2,1,0.5,2.1c0.3,1.1,0.4,1.9,0.2,2.5C182.4,28.3,182.1,28.9,181.5,29.4z"/></g><g id="abort" class="button" style="visibility:hidden" onClick="wwr_req(40668)"> <path id="abort_text" fill="#FF2200" d="M113.5,57.4l-4.1,0.9l-0.7-3.1l11.4-2.6l0.8,3.7c0.7,3.1-0.1,4.9-2.3,5.4 c-1.3,0.3-2.5-0.1-3.5-1.2l-4.2,4.4l-0.8-3.5l3.6-3.4L113.5,57.4z M115.9,56.9l0.1,0.6c0.2,1.1,0.8,1.5,1.8,1.3 c0.8-0.2,1.1-0.8,0.8-1.8l-0.1-0.6L115.9,56.9z M116.6,75.3l-3.5-6l10-6l3.5,6l-2.2,1.3l-1.9-3.2l-1.6,0.9l1.8,3l-2.2,1.3l-1.8-3 l-1.9,1.1l1.9,3.2L116.6,75.3z M130.1,76.2c-0.6-0.5-1.2-0.7-1.9-0.5c-0.7,0.2-1.4,0.7-2.2,1.5c-1.5,1.7-1.6,3.1-0.3,4.2 c0.4,0.3,0.8,0.6,1.3,0.8c0.5,0.2,0.9,0.4,1.4,0.6l-1.8,2c-1-0.3-2-0.9-2.9-1.7c-1.3-1.2-2-2.5-2-3.8c0-1.4,0.6-2.8,1.9-4.2 c0.8-0.9,1.7-1.5,2.6-1.9c0.9-0.4,1.9-0.5,2.9-0.3c1,0.2,1.9,0.7,2.7,1.5c0.9,0.8,1.7,1.8,2.2,3l-2.4,1.2c-0.2-0.4-0.4-0.9-0.6-1.2 C130.8,76.9,130.5,76.5,130.1,76.2z M143.9,87c-0.7,1.8-1.7,3.1-3,3.7c-1.3,0.6-2.8,0.6-4.5-0.1c-1.7-0.7-2.8-1.6-3.4-2.9	c-0.5-1.3-0.5-2.9,0.2-4.7c0.7-1.8,1.7-3,3-3.6c1.3-0.6,2.8-0.6,4.5,0.1c1.7,0.7,2.9,1.6,3.4,2.9C144.7,83.6,144.6,85.2,143.9,87z M136.4,84.1c-0.8,2.1-0.5,3.4,1,4c0.7,0.3,1.4,0.2,2-0.1c0.6-0.4,1-1.1,1.5-2.2c0.4-1.1,0.5-2,0.4-2.6c-0.2-0.7-0.6-1.1-1.3-1.4 C138.3,81.2,137.2,82,136.4,84.1z M151.1,89.1l0.1,4.2l-3.2,0.1l-0.2-11.7l3.8-0.1c3.2-0.1,4.8,1.1,4.8,3.4c0,1.4-0.6,2.4-1.9,3.2	l3.5,5l-3.6,0.1l-2.5-4.2L151.1,89.1z M151.1,86.7l0.6,0c1.1,0,1.6-0.5,1.6-1.5c0-0.8-0.6-1.2-1.6-1.2l-0.6,0L151.1,86.7z M170,83.1c0.7,1.8,0.7,3.4,0.1,4.8c-0.6,1.4-1.9,2.4-3.7,3.1l-3.5,1.3l-4.1-10.9l3.8-1.4c1.8-0.7,3.3-0.7,4.6-0.2	C168.4,80.3,169.4,81.4,170,83.1z M167,84.3c-0.4-1-0.9-1.7-1.4-2c-0.6-0.3-1.3-0.4-2.1,0l-0.9,0.3l2.3,6.1l0.7-0.2	c0.9-0.3,1.5-0.8,1.7-1.5C167.5,86.3,167.4,85.4,167,84.3z M176.7,85.7l-7-9.4l2.5-1.9l7,9.4L176.7,85.7z M190.5,71l-2.4,3.3 l-9.2-1.4l0,0.1c1.1,0.7,1.9,1.2,2.5,1.6l4.3,3.1l-1.6,2.3l-9.4-6.9l2.4-3.3l9.1,1.3l0,0c-1-0.6-1.8-1.2-2.4-1.6l-4.3-3.1l1.7-2.3	L190.5,71z M187.6,58.6l1.2-4.9l6.1,1.5c0.1,1.4,0,3-0.4,4.6c-0.4,1.7-1.3,3-2.5,3.7c-1.2,0.7-2.8,0.8-4.7,0.4	c-1.8-0.4-3.1-1.3-3.9-2.6c-0.8-1.3-0.9-2.9-0.5-4.8c0.2-0.7,0.4-1.4,0.7-2c0.3-0.6,0.6-1.1,0.9-1.5l2.2,1.6 c-0.6,0.7-1,1.6-1.3,2.5c-0.2,0.9-0.1,1.7,0.4,2.3c0.5,0.6,1.2,1.1,2.3,1.3c1.1,0.3,1.9,0.2,2.6-0.1c0.7-0.3,1.1-0.9,1.3-1.7 c0.1-0.5,0.2-0.9,0.2-1.3l-1.8-0.4l-0.5,2L187.6,58.6z M132.4,23.3l-1.9-1.3l-2.9,2.5l1,2l-2.6,2.3l-4.8-11.4l3.2-2.7l10.6,6.4 L132.4,23.3z M128.4,20.5l-1.6-1.1c-0.4-0.2-0.8-0.6-1.4-1c-0.6-0.4-1-0.7-1.2-0.9c0.1,0.2,0.4,0.6,0.7,1.2 c0.3,0.6,0.9,1.7,1.7,3.4L128.4,20.5z M132.6,9.6l3.8-1.4c1.5-0.5,2.7-0.7,3.6-0.5c0.9,0.2,1.5,0.7,1.8,1.7 c0.2,0.6,0.3,1.2,0.1,1.7c-0.2,0.5-0.5,1-0.9,1.3l0,0.1c0.7-0.1,1.3,0.1,1.8,0.4s0.8,0.8,1.1,1.5c0.4,1,0.3,1.9-0.3,2.8 c-0.5,0.8-1.5,1.5-2.7,2l-4.3,1.5L132.6,9.6z M137.1,12.7l0.9-0.3c0.4-0.2,0.7-0.4,0.9-0.6c0.2-0.3,0.2-0.6,0.1-0.9 c-0.2-0.6-0.8-0.8-1.7-0.4l-0.8,0.3L137.1,12.7z M137.9,14.9l0.8,2.3l1-0.4c0.9-0.3,1.2-0.9,1-1.7c-0.1-0.4-0.4-0.6-0.7-0.7 c-0.3-0.1-0.7-0.1-1.2,0.1L137.9,14.9z M158.4,11.5c-0.1,2-0.6,3.4-1.6,4.4c-1,1-2.4,1.5-4.3,1.4c-1.8-0.1-3.2-0.6-4.2-1.7	c-0.9-1.1-1.4-2.6-1.3-4.5c0.1-1.9,0.6-3.4,1.6-4.4c1-1,2.4-1.5,4.3-1.4c1.9,0.1,3.3,0.6,4.2,1.7C158,8,158.4,9.5,158.4,11.5z M150.3,11.3c-0.1,2.3,0.7,3.4,2.3,3.5c0.8,0,1.4-0.2,1.8-0.8c0.4-0.5,0.6-1.4,0.7-2.5c0-1.2-0.1-2-0.5-2.6 c-0.4-0.6-0.9-0.9-1.7-0.9C151.2,7.9,150.4,9,150.3,11.3z M165,15.5l-1.7,3.9l-2.9-1.3l4.7-10.7l3.5,1.5c2.9,1.3,3.9,3,3,5.1 c-0.5,1.2-1.6,1.9-3.1,2.1l1.1,6l-3.3-1.4l-0.6-4.9L165,15.5z M166,13.3l0.5,0.2c1,0.4,1.7,0.2,2.1-0.7c0.3-0.7,0-1.3-1-1.8 l-0.6-0.2L166,13.3z M174.4,26.7l-2.3-2.1l6.1-6.7l-2.1-1.9l1.7-1.9l6.5,6l-1.7,1.9l-2.1-1.9L174.4,26.7z"/> <polygon id="abort_cross" visibility ="hidden" fill="#FF2200" points="171.9,37.8 163.6,29.5 151.7,41.4 139.8,29.5 131.5,37.8 143.4,49.7 131.5,61.6 139.8,69.9 151.7,58 163.6,69.9 171.9,61.6 160,49.7"/>	<circle class="mouseover" visibility ="hidden" opacity="0.05" fill="#FFFFFF" cx="151.4" cy="49.7" r="49.7"/></g><g id="button-record" onClick="wwr_req(1013)"> <g id="record_off" class="button" >  <circle class="shadow" opacity="0.15" cx="50.4" cy="58.3" r="49.7"/> <path fill="#5D3729" d="M49.7,98.8c-27.1,0-49-21.9-49-49s21.9-49,49-49s49,21.9,49,49S76.9,98.8,49.7,98.8z"/> <path fill="#1A1A1A" d="M49.7,1.4c26.7,0,48.3,21.7,48.3,48.3S76.5,98.1,49.7,98.1S1.4,76.5,1.4,49.7S23,1.4,49.7,1.4 M49.7,0           C22.3,0,0,22.3,0,49.7s22.3,49.7,49.7,49.7s49.7-22.3,49.7-49.7S77.2,0,49.7,0L49.7,0z"/> <linearGradient id="rec_off1" gradientUnits="userSpaceOnUse" x1="49.7368" y1="-879.7368" x2="49.7368" y2="-831.4211" gradientTransform="matrix(1 0 0 -1 0 -830)"> <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0.25"/> <stop  offset="1" style="stop-color:#FFFFFF"/> </linearGradient> <path opacity="0.15" fill="url(#rec_off1)" d="M98.1,49.7H1.4l0,0C1.4,23,23,1.4,49.7,1.4l0,0 C76.6,1.4,98.1,23,98.1,49.7L98.1,49.7z"/> <circle opacity="0.5" fill="none" stroke="#FFFFFF" stroke-width="11.0527" stroke-miterlimit="10" cx="49.7" cy="49.7" r="23.3"/> <path class="mouseover" visibility="hidden" opacity="0.1" fill="#FFFFFF" d="M49.7,98.8c-27.1,0-49-21.9-49-49s21.9-49,49-49s49,21.9,49,49 S76.9,98.8,49.7,98.8z"/> </g> <g id="record_on" class="button" visibility="hidden" > <path fill="#FF2200" d="M49.7,98.8c-27.1,0-49-21.9-49-49s21.9-49,49-49s49,21.9,49,49S76.9,98.8,49.7,98.8z"/> <path fill="#1A1A1A" d="M49.7,1.4c26.7,0,48.3,21.7,48.3,48.3S76.5,98.1,49.7,98.1S1.4,76.5,1.4,49.7S23,1.4,49.7,1.4 M49.7,0 C22.3,0,0,22.3,0,49.7s22.3,49.7,49.7,49.7s49.7-22.3,49.7-49.7S77.2,0,49.7,0L49.7,0z"/><circle opacity="0.5" fill="none" stroke="#FFFFFF" stroke-width="11.0527" stroke-miterlimit="10" cx="49.7" cy="49.7" r="23.3"/><path class="mouseover" visibility="hidden" opacity="0.2" fill="#FFFFFF" d="M49.7,98.8c-27.1,0-49-21.9-49-49s21.9-49,49-49s49,21.9,49,49 S76.9,98.8,49.7,98.8z"/> </g> </g> </svg>
+        </div> 
+    
+ 
+    </div>
+
+<div id="backLoad" style="display:none">
+   
+    <element id=trackRow2Svg>  
+        <svg version="1.1" class="faderSvg" display="block" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="100%" height="100%" viewBox="0 1 320 47" xml:space="preserve">
+        <rect x="0" fill="#333333" width="320" height="36"/>
+        <rect id="fader_track" x="23" y="16.7" transform="matrix(-1 -1.224647e-16 1.224647e-16 -1 320 37.3333)" opacity="0.5" fill="#1A1A1A" width="274" height="4"/>
+        <g class="fader">
+            <g>
+                    <linearGradient id="fGrad1" gradientUnits="userSpaceOnUse" x1="245.0833" y1="-114.0833" x2="245.0833" y2="-106.0833" gradientTransform="matrix(6.123234e-17 -1 -1 -6.123234e-17 -68.0833 263.0833)">
+                    <stop  offset="0" style="stop-color:#212121"/>
+                    <stop  offset="1" style="stop-color:#949494"/>
+                </linearGradient>
+                <rect x="38" y="0.5" fill="url(#fGrad1)" width="8" height="35"/>
+
+                    <linearGradient id="fGrad2" gradientUnits="userSpaceOnUse" x1="245.0833" y1="-106.0833" x2="245.0833" y2="-92.0833" gradientTransform="matrix(6.123234e-17 -1 -1 -6.123234e-17 -68.0833 263.0833)">
+                    <stop  offset="0" style="stop-color:#FFFFFF"/>
+                    <stop  offset="0.9991" style="stop-color:#7A7A7A"/>
+                </linearGradient>
+                <path fill="url(#fGrad2)" d="M26,0.5h12v35H26c-1.1,0-2-0.9-2-2v-31C24,1.4,24.9,0.5,26,0.5z"/>
+
+                    <linearGradient id="fGrad3" gradientUnits="userSpaceOnUse" x1="245.0833" y1="-91.0833" x2="245.0833" y2="-77.0833" gradientTransform="matrix(6.123234e-17 -1 -1 -6.123234e-17 -68.0833 263.0833)">
+
+                    <stop  offset="0" style="stop-color:#9C9C9C"/>
+                    <stop  offset="1" style="stop-color:#4D4D4D"/>
+                </linearGradient>
+                <path fill="url(#fGrad3)" d="M21,35.5c1.1,0,2-0.9,2-2v-31c0-1.1-0.9-2-2-2H9v35H21z"/>
+
+                    <linearGradient id="fGrad4" gradientUnits="userSpaceOnUse" x1="245.0833" y1="-77.0833" x2="245.0833" y2="-69.0833" gradientTransform="matrix(6.123234e-17 -1 -1 -6.123234e-17 -68.0833 263.0833)">
+                    <stop  offset="0" style="stop-color:#FFFFFF"/>
+                    <stop  offset="0.1231" style="stop-color:#F2F2F2"/>
+                    <stop  offset="0.3517" style="stop-color:#CFCFCF"/>
+                    <stop  offset="0.6607" style="stop-color:#979797"/>
+                    <stop  offset="1" style="stop-color:#525252"/>
+                </linearGradient>
+                <rect x="1" y="0.5" fill="url(#fGrad4)" width="8" height="35"/>
+            </g>
+            <path id="outline_1_" d="M1,0.5h20c1.1,0,2,0.9,2,2v31c0,1.1-0.9,2-2,2H1V0.5 M24,2.5c0-1.1,0.9-2,2-2h20v35H26c-1.1,0-2-0.9-2-2
+                V2.5 M0.5,0v36H21c1.4,0,2.5-1.1,2.5-2.5c0,1.4,1.1,2.5,2.5,2.5h20.5V0H26c-1.4,0-2.5,1.1-2.5,2.5C23.5,1.1,22.4,0,21,0H0.5L0.5,0z
+                "/>
+            <path opacity="0.1" fill="#FFFFFF" d="M2,1.5h19c0.6,0,1,0.4,1,1v31c0,0.6-0.4,1-1,1H2V1.5 M25,2.5
+                c0-0.6,0.4-1,1-1h19v33H26c-0.6,0-1-0.4-1-1V2.5 M1,0.5v35h20c1.1,0,2-0.9,2-2v-31c0-1.1-0.9-2-2-2H1L1,0.5z M24,2.5v31
+                c0,1.1,0.9,2,2,2h20v-35H26C24.9,0.5,24,1.4,24,2.5L24,2.5z"/>
+
+                <linearGradient id="fGrad5" gradientUnits="userSpaceOnUse" x1="245.0833" y1="-1061.0476" x2="245.0833" y2="-1058.0729" gradientTransform="matrix(6.123234e-17 -1 -1 -6.123234e-17 -1034.0834 263.0833)">
+                <stop  offset="0" style="stop-color:#FFFFFF;stop-opacity:0"/>
+                <stop  offset="0.5" style="stop-color:#FFFFFF"/>
+            </linearGradient>
+            <path opacity="0.33" fill="url(#fGrad5)" d="M26,35.5h1v-1h-1c-0.6,0-1-0.4-1-1v-31c0-0.6,0.4-1,1-1
+                h1v-1h-1c-1,0-1.8,0.7-2,1.6v31.8C24.2,34.8,25,35.5,26,35.5z"/>
+        </g>
+        </svg>  
+    </element>
+   
+    <element id=trackSendSvg>    
+        <svg version="1.1"  display="block" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="100%"
+             height="100%" viewBox="0 0 320 48" xml:space="preserve">
+        <rect class="sendPanelBg" fill="#333333" width="320" height="49"/>
+        <path class="sendBg" fill="#262626" d="M244,0c-0.3,0-0.7,0-1,0v0H142h-17H27v0c-0.3,0-0.7,0-1,0C13.8,0,4,9.8,4,22s9.8,22,22,22
+            c0.3,0,0.7,0,1,0v0h98h17h101v0c0.3,0,0.7,0,1,0c12.2,0,22-9.8,22-22S256.2,0,244,0z"/>
+        <line class="sendLine" style="pointer-events:none" fill="none" opacity="0.5" stroke="#404040"  stroke-width="38" stroke-linecap="round" stroke-miterlimit="10" x1="27" y1="22" x2="130" y2="22"/>
+        <text class="sendTitleText" style="pointer-events:none" transform="matrix(1 0 0 1 25 29)" fill="#A3A3A3" font-family="'Open Sans'" font-size="19px">Target Name</text>
+        <text class="sDbText" style="pointer-events:none" text-anchor="end" transform="matrix(1 0 0 1 250 27)" fill="#A3A3A3" font-family="'Open Sans'" font-size="12px">xx dB</text>
+        <circle class="sendThumb" opacity="0.5" fill="#808080" stroke="#262626" stroke-width="2" stroke-miterlimit="10" cx="26" cy="22" r="19"/>
+
+            <g class="send_mute button">
+                <g class="send_mute_off" visibility="visible">
+                    <path class="shadow" opacity="0.15" d="M314.4,45.2c0,1-0.8,1.8-1.8,1.8h-39c-1,0-1.8-0.8-1.8-1.8
+                        v-4.6h42.7v4.6H314.4z"/>
+                        <linearGradient id="smoGrad" gradientUnits="userSpaceOnUse" x1="1720.0585" y1="-785.3847" x2="1720.0585" y2="-828.6583" gradientTransform="matrix(1 0 0 -1 -1427 -785)">
+                        <stop  offset="0" style="stop-color:#404040"/>
+                        <stop  offset="1" style="stop-color:#333333"/>
+                    </linearGradient>
+                    <path fill="url(#smoGrad)" d="M273.6,43.6c-1.2,0-2.1-1-2.1-2.1v-39c0-1.2,1-2.1,2.1-2.1h39c1.2,0,2.1,1,2.1,2.1v39
+                        c0,1.2-1,2.1-2.1,2.1H273.6z"/>
+                    <g>
+                        <path fill="#805240" d="M293.1,25.9L293.1,25.9l4.2-10h2.2v12.3h-1.8V19h-0.1l-3.9,9.1h-1.2l-4-9.5h-0.1v9.5h-1.8V15.9h2.3
+                            L293.1,25.9z"/>
+                    </g>
+                    <path class="mouseover" visibility="hidden" opacity="0.05" fill="#FFFFFF" d="M273.6,43.6c-1.2,0-2.1-1-2.1-2.1v-39 c0-1.2,1-2.1,2.1-2.1h39c1.2,0,2.1,1,2.1,2.1v39c0,1.2-1,2.1-2.1,2.1H273.6z"/>
+                </g>
+                <g class="send_mute_on" visibility="hidden">
+                    <path display="inline" fill="#F13F24" d="M273.6,43.6c-1.2,0-2.1-1-2.1-2.1v-39c0-1.2,1-2.1,2.1-2.1h39c1.2,0,2.1,1,2.1,2.1v39
+                        c0,1.2-1,2.1-2.1,2.1H273.6z"/>
+                    <g display="inline">
+                        <path fill="#FFFFFF" d="M293.1,25.9L293.1,25.9l4.2-10h2.2v12.3h-1.8V19h-0.1l-3.9,9.1h-1.2l-4-9.5h-0.1v9.5h-1.8V15.9h2.3
+                            L293.1,25.9z"/>
+                    </g>
+                    <path class="mouseover" visibility="hidden" opacity="0" fill="#FFFFFF" d="M273.6,43.6 c-1.2,0-2.1-1-2.1-2.1v-39c0-1.2,1-2.1,2.1-2.1h39c1.2,0,2.1,1,2.1,2.1v39c0,1.2-1,2.1-2.1,2.1H273.6z"/>
+                </g>
+                <path fill="#1A1A1A" d="M312.6,0.7c1,0,1.8,0.8,1.8,1.8v39c0,1-0.8,1.8-1.8,1.8h-39c-1,0-1.8-0.8-1.8-1.8v-39
+                    c0-1,0.8-1.8,1.8-1.8H312.6 M312.6,0.1h-39c-1.3,0-2.4,1.1-2.4,2.4v39c0,1.3,1.1,2.4,2.4,2.4h39c1.3,0,2.4-1.1,2.4-2.4v-39
+                    C315,1.2,313.9,0.1,312.6,0.1L312.6,0.1z"/>
+            </g>
+        </svg>            
+    </element>     
+</div>
+</div>
+</body>
+</html>
+
+
+<!--TO DO : change colours when colours change to default -->
