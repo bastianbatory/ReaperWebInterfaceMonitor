@@ -1,4 +1,4 @@
-# Reaper Web Interface Monitor with Regions
+# Reaper Web Interface Monitor [with Regions]
 
 - Copy html file to C:\Users\{user}\AppData\Roaming\REAPER\reaper_www_root  
 - Load on Web Browser Interface on Reaper preferences
