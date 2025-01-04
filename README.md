@@ -1,6 +1,6 @@
 # Reaper Web Interface Monitor
 
-- Copy the html file to C:\Users\{user}\AppData\Roaming\REAPER\reaper_www_root  
+- Copy html file to C:\Users\{user}\AppData\Roaming\REAPER\reaper_www_root  
 - Load on Web Browser Interface on Reaper preferences
 - Separate your songs into regions and name each one, also route the tracks you want to monitor to hardware output(s)
 
