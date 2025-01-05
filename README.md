@@ -5,6 +5,7 @@
 - Separate your songs into regions and name each one, also route the tracks you want to monitor to hardware output(s)
 
 This will display all monitoring tracks plus all regions, you can select each region you want to play, useful to live performance, metronome guide and monitor your playtrough.  
+Allows recording, play and pause, volume and mute for each monitoring track, master volume.
 
 
 <img src="https://github.com/user-attachments/assets/20ba21ad-9e19-4964-b0ef-341ab8526e34" alt="Image 1" width="200">
