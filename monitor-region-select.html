@@ -5,7 +5,7 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=0" />
 
-<title>Web Interface Monitor v1</title>
+<title>Web Interface Monitor v1.2</title>
 <script src="main.js"></script>
 
 <style type="text/css">
@@ -318,30 +318,44 @@ for (var x=0;x<ar.length;x++) {
             break;
             
       case "REGION_LIST_END":
-        
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+                
+                const svgElement = document.querySelector('#regions svg');
+                document.documentElement.style.setProperty('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+                
+                if (svgElement) {
+                    svgElement.style.visibility = 'visible';
+                    svgElement.style.pointerEvents = 'all'; 
+                    svgElement.style.width = '100%'; 
+                    svgElement.style.height = 'auto'; 
+                }
+            }
+
             for (var i = 0; i < g_regions.length; i++) {
-                if (
+                regionId = parseInt(g_regions[i][2].replace(/\s+/g, '') - 1);
+                if ( 
                     (i < g_regions.length - 1 && 
                         playPosSeconds >= parseFloat(g_regions[i][3]) && 
                         playPosSeconds < Math.floor(parseFloat(g_regions[i + 1][3]) * 1e6) / 1e6) ||
                     (i === g_regions.length - 1 && playPosSeconds >= parseFloat(g_regions[i][3]))
                 ) {
-                    
-                    cursorRegion = g_regions[i][1].replace(/\s+/g, '');  // get region on cursor
+                    cursorRegion = g_regions[i][1].replace(/\s+/g, '');  // get region at cursor
                     newRegion = cursorRegion;
-                    cursorRegionId = parseFloat(g_regions[i][2]) - 1;
+                    cursorRegionId = parseFloat(g_regions[i][2]);
                     newRegionId = cursorRegionId;
                 }
             }
             
             const regionsDiv = document.getElementById("regions");
             const regionDiv = regionsDiv.querySelector("#region");
-            if (g_regions.length > 0) {
+            if (g_regions.length > 0) { // draw regions
                 for (var i = 0; i < g_regions.length; i++) {
                     regionName = g_regions[i][1].replace(/\s+/g, '');
-                    const regionX = document.getElementById("region" + i);
+                    regionId = parseInt(g_regions[i][2].replace(/\s+/g, ''));
+                    const regionX = document.getElementById("region" + regionId);
                     if (!regionX) {
-                        let action= 41761 + i
+                        let action= 41760 + regionId
                         const region = regionDiv.cloneNode(true);
                         const button = region.querySelector(".button");
                         const regname = region.querySelector(".regionName");
@@ -350,13 +364,13 @@ for (var x=0;x<ar.length;x++) {
                         const cyangrad = region.querySelector("#cyangrad");
                         const graygrad = region.querySelector("#graygrad");
                         button.setAttribute("onclick", `wwr_req(${action}), wwr_req(1007) `);
-                        pathbtn.setAttribute("fill", `url(#graygrad${i})`);
-                        cyangrad.id = "cyangrad" + i;
-                        graygrad.id = "graygrad" + i;
-                        region.id = "region" + i;
+                        pathbtn.setAttribute("fill", `url(#graygrad${regionId})`);
+                        cyangrad.id = "cyangrad" + regionId;
+                        graygrad.id = "graygrad" + regionId;
+                        region.id = "region" + regionId;
                         region.style.removeProperty("display");
                         regname.innerHTML = regionName;
-                        if (i % 2 !==0) {
+                        if (i % 2 !==0) { 
                             svg.style.transform = 'scaleX(-1)';
                         }
                         regionsDiv.appendChild(region);
@@ -576,7 +590,8 @@ function init(){
       }
     }
   }
-}    
+} 
+  
 </script>
 </head>
 <body>
